@@ -1,6 +1,6 @@
 import uuid
 from flask import Flask, request, jsonify
-from signals import get_llm_signal
+from signals import get_llm_signal, get_stylometric_signal, get_confidence_score, get_label_category
 from logger import add_log_entry, get_log
 
 app = Flask(__name__)
@@ -14,11 +14,12 @@ def submit():
     content_id = str(uuid.uuid4())
 
     llm_score = get_llm_signal(text)
+    stylo_score = get_stylometric_signal(text)
+    confidence = get_confidence_score(llm_score, stylo_score)
+    attribution = get_label_category(confidence)
 
-    # Placeholder logic — real combined scoring comes in Milestone 4
-    confidence = llm_score
-    attribution = "likely_ai" if llm_score >= 0.5 else "likely_human"
-    label = f"[Placeholder] Attribution: {attribution}, confidence: {confidence}"
+    # Real label text comes in Milestone 5 — still a placeholder for now
+    label = f"[Placeholder] Attribution: {attribution}, confidence: {confidence:.2f}"
 
     add_log_entry({
         "content_id": content_id,
@@ -26,6 +27,7 @@ def submit():
         "attribution": attribution,
         "confidence": confidence,
         "llm_score": llm_score,
+        "stylo_score": stylo_score,
         "status": "classified"
     })
 

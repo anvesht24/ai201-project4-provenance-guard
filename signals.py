@@ -1,6 +1,10 @@
 import os
 from dotenv import load_dotenv
 from groq import Groq
+import re
+import statistics
+
+
 
 load_dotenv()
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
@@ -43,13 +47,64 @@ Text to analyze:
     return score
 
 
+def get_stylometric_signal(text: str) -> float:
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    sentences = [s for s in sentences if s]
+
+    if len(sentences) < 2:
+        return 0.5
+
+    lengths = [len(s.split()) for s in sentences]
+    length_variance = statistics.variance(lengths)
+    variance_score = max(0.0, min(1.0, 1 - (length_variance / 80)))
+
+    words = re.findall(r'\b\w+\b', text.lower())
+    if len(words) == 0:
+        ttr_score = 0.5
+    else:
+        unique_words = set(words)
+        ttr = len(unique_words) / len(words)
+        ttr_score = max(0.0, min(1.0, 1 - ((ttr - 0.80) / 0.15)))
+
+    stylo_score = (variance_score + ttr_score) / 2
+    return stylo_score
+
+def get_confidence_score(llm_score: float, stylo_score: float) -> float:
+    """
+    Combines the LLM and stylometric signals into a single confidence score,
+    per planning.md: weighted average, LLM weighted higher (0.6) since it 
+    captures meaning, a stronger signal than structure alone.
+    """
+    combined = (0.6 * llm_score) + (0.4 * stylo_score)
+    return combined
+
+
+def get_label_category(confidence: float) -> str:
+    """
+    Maps a combined confidence score to one of 3 categories, per 
+    planning.md thresholds.
+    """
+    if confidence <= 0.40:
+        return "likely_human"
+    elif confidence < 0.75:
+        return "uncertain"
+    else:
+        return "likely_ai"
+
 # Standalone test block — only runs when you execute this file directly
 if __name__ == "__main__":
-    test_texts = [
-        "Artificial intelligence represents a transformative paradigm shift in modern society. It is important to note that while the benefits of AI are numerous, it is equally essential to consider the ethical implications.",
-        "ok so i finally tried that new ramen place downtown and honestly? underwhelming. the broth was fine but they put WAY too much sodium in it.",
-    ]
+    test_texts = {
+        "clearly_ai": "Artificial intelligence represents a transformative paradigm shift in modern society. It is important to note that while the benefits of AI are numerous, it is equally essential to consider the ethical implications. Furthermore, stakeholders across various sectors must collaborate to ensure responsible deployment.",
+        "clearly_human": "ok so i finally tried that new ramen place downtown and honestly? underwhelming. the broth was fine but they put WAY too much sodium in it and i was thirsty for like three hours after. my friend got the spicy version and said it was better. probably won't go back unless someone drags me there",
+        "borderline_formal_human": "The relationship between monetary policy and asset price inflation has been extensively studied in the literature. Central banks face a fundamental tension between their mandate for price stability and the unintended consequences of prolonged low interest rates on equity and real estate valuations.",
+        "borderline_edited_ai": "I've been thinking a lot about remote work lately. There are genuine tradeoffs — flexibility and no commute on one side, isolation and blurred work-life boundaries on the other. Studies show productivity varies widely by individual and role type.",
+    }
 
-    for t in test_texts:
-        score = get_llm_signal(t)
-        print(f"Score: {score}  |  Text: {t[:60]}...")
+    for label, text in test_texts.items():
+        llm = get_llm_signal(text)
+        stylo = get_stylometric_signal(text)
+        combined = get_confidence_score(llm, stylo)
+        category = get_label_category(combined)
+        print(f"{label}: llm={llm:.2f}  stylo={stylo:.2f}  combined={combined:.2f}  category={category}")
+
+
