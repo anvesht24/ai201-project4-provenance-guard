@@ -91,6 +91,21 @@ def get_label_category(confidence: float) -> str:
     else:
         return "likely_ai"
 
+def get_label_text(confidence: float) -> str:
+    """
+    Maps a confidence score to the exact transparency label text,
+    per planning.md label variants.
+    """
+    category = get_label_category(confidence)
+    pct = round(confidence * 100)
+
+    if category == "likely_ai":
+        return f"Our system found strong indicators this content was AI-generated. Confidence: {pct}%."
+    elif category == "likely_human":
+        return f"Our system found this content likely human-written, with no strong AI indicators. Confidence: {pct}%."
+    else:  # uncertain
+        return f"Our system could not confidently determine whether this content was AI-generated or human-written. Confidence: {pct}%. The creator may appeal this classification."
+
 # Standalone test block — only runs when you execute this file directly
 if __name__ == "__main__":
     test_texts = {
@@ -99,6 +114,9 @@ if __name__ == "__main__":
         "borderline_formal_human": "The relationship between monetary policy and asset price inflation has been extensively studied in the literature. Central banks face a fundamental tension between their mandate for price stability and the unintended consequences of prolonged low interest rates on equity and real estate valuations.",
         "borderline_edited_ai": "I've been thinking a lot about remote work lately. There are genuine tradeoffs — flexibility and no commute on one side, isolation and blurred work-life boundaries on the other. Studies show productivity varies widely by individual and role type.",
     }
+    print("\n--- Label text check ---")
+    for score in [0.1, 0.3, 0.5, 0.65, 0.8, 0.95]:
+        print(f"confidence={score}: {get_label_text(score)}")
 
     for label, text in test_texts.items():
         llm = get_llm_signal(text)
